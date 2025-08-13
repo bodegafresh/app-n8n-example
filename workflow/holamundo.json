@@ -15,7 +15,7 @@
     },
     {
       "parameters": {
-        "responseBody": "hola mundo",
+        "responseBody": "hola mundo y el web-hook de n8n",
         "respondWith": "text",
         "options": {}
       },
