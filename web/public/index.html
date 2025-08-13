@@ -3,148 +3,178 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>MVP · n8n + Webhook</title>
-  <meta name="description" content="Demo profesional: botón que llama a un webhook de n8n y muestra la respuesta." />
+  <title>DOJO · Wing Chun · n8n</title>
+  <meta name="description" content="Demo con estética Bruce Lee/Wing Chun: botón que invoca un webhook de n8n y muestra la respuesta.">
+
   <style>
+    /* Paleta Bruce Lee (amarillo/negro) */
     :root{
-      --bg: #0b1020;
-      --card: rgba(255,255,255,.08);
-      --text: #e8eefc;
-      --muted:#9fb0d0;
-      --brand:#6aa7ff;
-      --brand-2:#7bffcf;
-      --danger:#ff6b6b;
-      --ok:#22c55e;
-      --ring: rgba(122, 162, 247, .45);
-    }
-    @media (prefers-color-scheme: light){
-      :root{
-        --bg: #f4f7ff;
-        --card: rgba(255,255,255,.9);
-        --text: #0c1a34;
-        --muted:#5b6b85;
-        --brand:#2563eb;
-        --brand-2:#06b6d4;
-        --danger:#e11d48;
-        --ok:#16a34a;
-        --ring: rgba(37, 99, 235, .25);
-      }
+      --bg:#0a0a0a;
+      --panel:#111317;
+      --ink:#0c0c0c;
+      --text:#f6f7f9;
+      --muted:#c7c9cf;
+      --gold:#f7c325;       /* traje amarillo icónico */
+      --gold-2:#ffde59;
+      --accent:#111;        /* franjas negras */
+      --ok:#16a34a;
+      --err:#ef4444;
+      --ring: rgba(247, 195, 37, .35);
     }
 
-    /* Background gradient + orbes */
     html,body{height:100%}
     body{
-      margin:0; font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Inter, sans-serif;
-      color:var(--text); background: radial-gradient(1200px 800px at 80% -20%, #1b2b65 0%, transparent 60%), radial-gradient(900px 700px at -10% 110%, #0f766e 0%, transparent 60%), var(--bg);
+      margin:0;
+      background:
+        radial-gradient(1200px 700px at 80% -20%, rgba(247,195,37,.08), transparent 60%),
+        radial-gradient(900px 600px at -10% 120%, rgba(247,195,37,.06), transparent 60%),
+        var(--bg);
+      color:var(--text);
+      font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Inter, sans-serif;
       display:grid; place-items:center; padding:24px;
+      overflow-x:hidden;
     }
 
-    .wrap{ width:min(940px, 92vw); position:relative; }
-    .brand{
-      display:flex; align-items:center; gap:12px; margin-bottom:18px;
+    /* Banda diagonal negra sobre franja amarilla (tracksuit vibes) */
+    .stripe{
+      position:fixed; inset:0; pointer-events:none; z-index:-1;
+      background:
+        linear-gradient(160deg, transparent 0 38%, var(--gold) 38% 42%, transparent 42% 100%),
+        linear-gradient(160deg, transparent 0 40%, var(--accent) 40% 46%, transparent 46% 100%);
+      opacity:.45;
+      filter:saturate(1.1);
+    }
+
+    .wrap{ width:min(980px, 94vw); }
+
+    /* Marca + ideograma */
+    .head{
+      display:flex; align-items:center; gap:14px; margin:0 0 12px 0;
       letter-spacing:.2px;
     }
-    .brand svg{ width:32px; height:32px; }
-    .badge{ font-size:12px; color:var(--muted); border:1px solid rgba(255,255,255,.15); padding:4px 8px; border-radius:999px; }
+    .seal{
+      width:44px; height:44px; border-radius:10px;
+      background: radial-gradient(circle at 30% 25%, var(--gold-2), var(--gold));
+      box-shadow: 0 6px 28px rgba(247,195,37,.15), inset 0 0 0 2px rgba(0,0,0,.35);
+      display:grid; place-items:center;
+    }
+    .seal svg{ width:26px; height:26px; }
 
-    .card{
-      background: var(--card); backdrop-filter: blur(10px);
-      border: 1px solid rgba(255,255,255,.12);
-      border-radius:20px; padding:28px; box-shadow: 0 20px 50px rgba(0,0,0,.25);
+    .dojo{
+      background: linear-gradient(180deg, rgba(255,255,255,.06), rgba(255,255,255,.02));
+      border:1px solid rgba(255,255,255,.1);
+      border-radius:18px; padding:26px;
+      box-shadow: 0 24px 60px rgba(0,0,0,.25);
+      position:relative;
+      overflow:hidden;
     }
 
-    h1{ margin:0 0 8px 0; font-size: clamp(22px, 3.2vw, 28px); }
-    p.lead{ margin:0 0 20px 0; color:var(--muted) }
+    /* Agua de tinta (brush) */
+    .dojo::before{
+      content:"詠春"; /* Wing Chun */
+      position:absolute; right:-8px; top:-8px;
+      font-size:140px; line-height:1;
+      color:rgba(255,255,255,.04);
+      font-family: "Georgia", "Times New Roman", serif;
+      transform: rotate(-10deg);
+      user-select:none; pointer-events:none;
+    }
 
-    .row{ display:flex; gap:20px; flex-wrap:wrap }
-    .col{ flex:1 1 320px }
+    h1{margin:0; font-size:clamp(22px,3.2vw,28px)}
+    .lead{margin:6px 0 18px 0; color:var(--muted)}
+
+    .grid{display:grid; grid-template-columns: 1.15fr 1fr; gap:18px}
+    @media (max-width:920px){ .grid{ grid-template-columns:1fr } }
 
     .panel{
-      background: rgba(255,255,255,.04);
-      border:1px solid rgba(255,255,255,.12);
-      border-radius:16px; padding:18px;
+      background:linear-gradient(180deg, rgba(255,255,255,.04), rgba(255,255,255,.02));
+      border:1px solid rgba(255,255,255,.1);
+      border-radius:14px; padding:16px;
     }
 
-    /* Botón primario */
+    /* Botón con “cinta” de cinturón */
     .actions{ display:flex; align-items:center; gap:12px; flex-wrap:wrap }
     .btn{
-      appearance:none; border:0; border-radius:12px; padding:12px 16px;
-      font-weight:600; cursor:pointer;
-      color:#0b1020; background: linear-gradient(135deg, var(--brand), var(--brand-2));
-      box-shadow: 0 6px 18px rgba(0,0,0,.25);
-      transition: transform .12s ease, box-shadow .2s ease, filter .2s ease;
+      appearance:none; border:0; border-radius:12px; padding:12px 16px; font-weight:700;
+      color:#0a0a0a; background:linear-gradient(135deg, var(--gold), var(--gold-2));
+      box-shadow: 0 8px 20px rgba(247,195,37,.25), inset 0 -2px 0 rgba(0,0,0,.2);
+      cursor:pointer; transition: transform .1s ease, filter .2s ease, box-shadow .2s ease;
+      position:relative; isolation:isolate;
     }
-    .btn:hover{ transform: translateY(-1px); filter: brightness(1.05) }
+    .btn::after{
+      /* cinta negra al centro */
+      content:""; position:absolute; inset:50% -10px auto -10px; height:4px; background:var(--accent);
+      transform: translateY(-50%); border-radius:999px; z-index:-1; opacity:.85;
+    }
+    .btn:hover{ transform: translateY(-1px); filter:brightness(1.05) }
     .btn:active{ transform: translateY(0) scale(.98) }
-    .btn[disabled]{ opacity:.6; cursor:progress; }
+    .btn[disabled]{ opacity:.65; cursor:progress }
 
-    .dot{ width:10px; height:10px; border-radius:999px; display:inline-block; vertical-align:middle; margin-right:6px; }
-    .ok { background:var(--ok) }
-    .err{ background:var(--danger) }
-    .muted{ color:var(--muted) }
+    /* Nunchaku mini como spinner */
+    .nun{ display:inline-grid; grid-auto-flow:column; gap:3px; transform-origin:center; animation:swirl .9s linear infinite }
+    .bar{ width:6px; height:14px; background:#0a0a0a; border-radius:2px }
+    .chain{ width:6px; height:6px; border:2px solid #0a0a0a; border-radius:50% }
+    @keyframes swirl{ to{ transform:rotate(360deg) } }
 
-    /* Área de resultado */
+    .status{ color:var(--muted); font-size:14px }
+    .dot{ width:10px; height:10px; border-radius:999px; display:inline-block; vertical-align:middle; margin-right:6px }
+    .ok{ background:var(--ok) } .err{ background:var(--err) } .idle{ background:#8886 }
+
     .result{
       font: 14px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-      background: rgba(0,0,0,.35);
-      border:1px dashed rgba(255,255,255,.2);
-      border-radius:12px; padding:14px; min-height:52px; white-space:pre-wrap;
+      background:#0b0d11; border:1px dashed rgba(255,255,255,.16);
+      border-radius:12px; padding:14px; min-height:56px; white-space:pre-wrap;
+      box-shadow: inset 0 0 14px rgba(0,0,0,.35);
     }
 
-    /* Spinner */
-    .spinner{ width:16px; height:16px; border-radius:50%; border:2px solid rgba(255,255,255,.35); border-top-color:#fff; animation:spin .8s linear infinite; display:inline-block; vertical-align:-3px; margin-right:8px }
-    @keyframes spin{ to{ transform:rotate(360deg)}}
-
-    footer{
-      margin-top:16px; text-align:center; color:var(--muted); font-size:12px;
+    .note{
+      margin-top:10px; font-size:12px; color:var(--muted)
     }
 
-    /* Focus rings accesibles */
-    .btn:focus-visible, a:focus-visible{ outline: 3px solid var(--ring); outline-offset: 2px; border-radius:12px }
+    .btn:focus-visible{ outline:3px solid var(--ring); outline-offset:2px }
+    a:focus-visible{ outline:3px solid var(--ring); outline-offset:2px; border-radius:8px }
   </style>
 </head>
 <body>
+  <div class="stripe" aria-hidden="true"></div>
+
   <div class="wrap">
-    <div class="brand">
-      <!-- Logo simple -->
-      <svg viewBox="0 0 32 32" fill="none" aria-hidden="true">
-        <defs>
-          <linearGradient id="g" x1="0" y1="0" x2="32" y2="32" gradientUnits="userSpaceOnUse">
-            <stop stop-color="#6aa7ff"/><stop offset="1" stop-color="#7bffcf"/>
-          </linearGradient>
-        </defs>
-        <rect x="2" y="2" width="28" height="28" rx="8" fill="url(#g)"/>
-        <path d="M10 17h12M10 11h8M10 23h6" stroke="#0b1020" stroke-width="2" stroke-linecap="round"/>
-      </svg>
+    <div class="head">
+      <div class="seal" aria-hidden="true">
+        <!-- puño estilizado -->
+        <svg viewBox="0 0 24 24" fill="none" role="img" aria-label="Fist">
+          <path d="M5 11c0-2 1-3 3-3h1M9 8h2M11 8h2M13 8h2c2 0 3 1 3 3v3c0 3-2 5-5 5H9c-3 0-5-2-5-5v-1" stroke="#0a0a0a" stroke-width="2" />
+        </svg>
+      </div>
       <div>
-        <div class="badge">Demo SaaS</div>
-        <h1>MVP · n8n + Webhook</h1>
+        <h1>DOJO · Wing Chun · n8n</h1>
+        <div class="lead">Velocidad y precisión: la web consulta un <strong>webhook</strong> y muestra su respuesta.</div>
       </div>
     </div>
 
-    <div class="card">
-      <p class="lead">Al pulsar el botón, el servidor consulta un workflow en <strong>n8n</strong> y muestra la respuesta.</p>
+    <div class="dojo">
+      <div class="grid">
+        <section class="panel">
+          <h3 style="margin:0 0 8px">Técnica</h3>
+          <p class="status" id="status"><span class="dot idle"></span>Listo</p>
 
-      <div class="row">
-        <div class="col panel">
-          <h3 style="margin:0 0 10px 0;">Acción</h3>
-          <p class="muted" style="margin:0 0 12px">Usa el endpoint <code>/api/hola</code> de esta app, que a su vez invoca el webhook de n8n.</p>
-          <div class="actions">
-            <button id="btn" class="btn" type="button">
-              <span id="btnText">Llamar a n8n</span>
+          <div class="actions" style="margin-top:10px">
+            <button class="btn" id="btn" type="button">
+              <span id="btnText">Aplicar golpe (llamar n8n)</span>
             </button>
-            <span id="status" class="muted"><span class="dot" style="background:#a5b4fc"></span>Listo</span>
           </div>
-        </div>
 
-        <div class="col panel">
-          <h3 style="margin:0 0 10px 0;">Resultado</h3>
+          <p class="note">Acción: esta app hace <code>GET /api/hola</code> y el servidor reenvía un <code>POST</code> al webhook de n8n.</p>
+        </section>
+
+        <section class="panel">
+          <h3 style="margin:0 0 8px">Resultado</h3>
           <div id="out" class="result" aria-live="polite"></div>
-        </div>
+        </section>
       </div>
     </div>
 
-    <footer>© Tu Empresa — Demo técnico</footer>
+    <p class="note" style="text-align:center;margin-top:14px">Inspirado en el espíritu de Bruce Lee y el Wing Chun. Demo técnica.</p>
   </div>
 
   <script>
@@ -154,32 +184,32 @@
     const statusEl = document.getElementById("status");
 
     function setStatus(kind, text){
-      const color = kind === "ok" ? "var(--ok)" : kind === "err" ? "var(--danger)" : "#a5b4fc";
+      const color = kind === "ok" ? "var(--ok)" : kind === "err" ? "var(--err)" : "#8886";
       statusEl.innerHTML = `<span class="dot" style="background:${color}"></span>${text}`;
     }
 
     async function callN8n(){
       btn.disabled = true;
-      btnText.innerHTML = `<span class="spinner"></span>Llamando…`;
-      setStatus("muted","Llamando al webhook");
+      btnText.innerHTML = `<span class="nun" aria-hidden="true"><span class="bar"></span><span class="chain"></span><span class="bar"></span></span> Ejecutando…`;
+      setStatus("idle","Llamando al webhook");
       out.textContent = "";
 
       try{
-        const r = await fetch("/api/hola", { method: "GET" });
+        const r = await fetch("/api/hola");
         const txt = await r.text();
         if(!r.ok){
           setStatus("err","Error");
           out.textContent = `⚠️ n8n devolvió ${r.status}:\n${txt}`;
         }else{
           setStatus("ok","Éxito");
-          out.textContent = txt; // ← “hola mundo”
+          out.textContent = txt; // “hola mundo”
         }
       }catch(e){
         setStatus("err","Fallo de red");
         out.textContent = "❌ Error llamando a n8n: " + e.message;
       }finally{
         btn.disabled = false;
-        btnText.textContent = "Llamar a n8n";
+        btnText.textContent = "Aplicar golpe (llamar n8n)";
       }
     }
 
