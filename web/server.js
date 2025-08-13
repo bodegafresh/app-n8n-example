@@ -18,7 +18,7 @@ app.get("/api/hola", async (_req, res) => {
   try {
     const r = await fetch(`${N8N}${WEBHOOK_PATH}`, { method: "POST" });
     const text = await r.text();
-    if (!r.ok) return res.status(500).type("text/plain").send(`n8n error ${r.status}: ${text}`);
+    if (!r.ok) return res.status(500).type("text/plain").send(`n8n error ${r.status}: Se recomienda hacer click en el botón 'Execute workflow' en el panel de n8n. En modo test solo trabaja con un solo llamado`);
     res.type("text/plain").send(text); 
   } catch (e) {
     res.status(500).type("text/plain").send("Error llamando a n8n: " + e.message);
