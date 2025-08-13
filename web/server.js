@@ -4,14 +4,15 @@ import fetch from "node-fetch";
 const app = express();
 const PORT = process.env.PORT || 8080;
 const N8N = (process.env.N8N_INTERNAL_URL || "http://n8n:5678").replace(/\/$/, "");
+const WEBHOOK = (process.env.N8N_WEBHOOK || "http://n8n:5678").replace(/\/$/, "");
 
 app.use(express.static("public"));
 
 app.get("/api/hola", async (_req, res) => {
   try {
    
-    const r = await fetch("https://agente01-n8n.njglfo.easypanel.host/webhook-test/holamundo", { method: "POST" });
-    //const r = await fetch(`${N8N}${N8N_WEBHOOK}`, { method: "POST" });
+    //const r = await fetch("https://agente01-n8n.njglfo.easypanel.host/webhook-test/holamundo", { method: "POST" });
+    const r = await fetch(`${N8N}${WEBHOOK}`, { method: "POST" });
     const text = await r.text();
     res.type("text/plain").send(text);
   } catch (e) {
