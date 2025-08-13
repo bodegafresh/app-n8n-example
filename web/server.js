@@ -9,7 +9,7 @@ app.use(express.static("public"));
 
 app.get("/api/hola", async (_req, res) => {
   try {
-
+    console.log(`${N8N}${N8N_WEBHOOK}`)
     const r = await fetch(`${N8N}${N8N_WEBHOOK}`, { method: "POST" });
     const text = await r.text();
     res.type("text/plain").send(text);
