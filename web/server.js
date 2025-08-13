@@ -9,7 +9,7 @@ app.use(express.static("public"));
 
 app.get("/api/hola", async (_req, res) => {
   try {
-    console.log(`${N8N}${N8N_WEBHOOK}`)
+   
     const r = await fetch("https://agente01-n8n.njglfo.easypanel.host/webhook-test/holamundo", { method: "POST" });
     //const r = await fetch(`${N8N}${N8N_WEBHOOK}`, { method: "POST" });
     const text = await r.text();
