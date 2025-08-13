@@ -9,6 +9,8 @@ docker compose up -d --build
 ```
 Probar webhook: `curl -X POST http://127.0.0.1:5678/webhook/holamundo`
 
+Example web: `https://agente01-demo.njglfo.easypanel.host`
+
 ## Easypanel (UI)
 - App **n8n**: imagen `n8nio/n8n:latest`, puerto interno `5678`, dominio propio
 - App **demo**: Dockerfile desde carpeta `web/`, puerto interno `8080`, dominio propio

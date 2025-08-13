@@ -1,22 +1,33 @@
 {
-  "name": "Marcos Flujos",
+  "name": "Hola Mundo",
   "nodes": [
     {
-      "parameters": { "httpMethod": "POST", "path": "holamundo", "responseMode": "responseNode", "options": {} },
+      "parameters": {
+        "path": "holamundo",
+        "httpMethod": "POST",
+        "responseMode": "responseNode"
+      },
+      "id": "Webhook",
       "name": "Webhook",
       "type": "n8n-nodes-base.webhook",
-      "typeVersion": 1
+      "typeVersion": 1,
+      "position": [200, 300]
     },
     {
-      "parameters": { "respondWith": "text", "responseBody": "hola mundo", "options": {} },
+      "parameters": {
+        "responseBody": "hola mundo",
+        "respondWith": "text",
+        "options": {}
+      },
+      "id": "Respond",
       "name": "Respond to Webhook",
       "type": "n8n-nodes-base.respondToWebhook",
-      "typeVersion": 1
+      "typeVersion": 1,
+      "position": [460, 300]
     }
   ],
   "connections": {
-    "Webhook": { "main": [[{ "node": "Respond to Webhook", "type": "main", "index": 0 }]] }
+    "Webhook": { "main": [ [ { "node": "Respond to Webhook", "type": "main", "index": 0 } ] ] }
   },
-  "settings": { "executionOrder": "v1" },
-  "active": false
+  "active": true
 }
