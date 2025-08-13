@@ -3,7 +3,7 @@ import fetch from "node-fetch";
 
 const app = express();
 const PORT = process.env.PORT || 8080;
-const N8N = process.env.N8N_INTERNAL_URL || "http://n8n:5678";
+const N8N = (process.env.N8N_INTERNAL_URL || "http://n8n:5678").replace(/\/$/, "");
 
 app.use(express.static("public"));
 
