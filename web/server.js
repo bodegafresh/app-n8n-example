@@ -9,7 +9,7 @@ app.use(express.static("public"));
 
 app.get("/api/hola", async (_req, res) => {
   try {
-    const r = await fetch(`${N8N}/webhook/holamundo`, { method: "POST" });
+    const r = await fetch(`${N8N_INTERNAL_URL}${N8N_WEBHOOK}`, { method: "POST" });
     const text = await r.text();
     res.type("text/plain").send(text);
   } catch (e) {
