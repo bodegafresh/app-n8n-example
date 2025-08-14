@@ -1,7 +1,10 @@
 version: "3.9"
+
 services:
   n8n:
     image: n8nio/n8n:latest
+    container_name: n8n
+    restart: unless-stopped
     environment:
       - GENERIC_TIMEZONE=America/Santiago
       - N8N_PORT=5678
@@ -9,14 +12,23 @@ services:
       - "5678:5678"
     volumes:
       - n8n_data:/home/node/.n8n
+
   web:
     build: ./web
+    container_name: web
+    restart: unless-stopped
     environment:
+      # ¡OJO! dentro del contenedor "web", "localhost" sería el propio contenedor.
+      # Por eso apunta a http://n8n:5678 (nombre del servicio).
       - N8N_INTERNAL_URL=http://n8n:5678
+      # Usa producción (workflow ACTIVO). Si quieres test, ver nota abajo.
+      - N8N_WEBHOOK=/webhook-test/holamundo
       - NPM_CONFIG_FUND=false
       - NPM_CONFIG_AUDIT=false
     ports:
       - "8080:8080"
-    depends_on: [n8n]
+    depends_on:
+      - n8n
+
 volumes:
   n8n_data:
