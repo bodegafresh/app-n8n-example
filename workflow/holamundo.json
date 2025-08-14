@@ -1,33 +1,52 @@
 {
-  "name": "Hola Mundo",
+  "name": "My workflow",
   "nodes": [
     {
       "parameters": {
-        "path": "holamundo",
         "httpMethod": "POST",
-        "responseMode": "responseNode"
+        "path": "holamundo",
+        "responseMode": "responseNode",
+        "options": {}
       },
       "id": "Webhook",
       "name": "Webhook",
       "type": "n8n-nodes-base.webhook",
       "typeVersion": 1,
-      "position": [200, 300]
+      "position": [
+        0,
+        0
+      ],
+      "webhookId": "03c21c95-836d-4a72-9413-98df1d906ee7"
     },
     {
       "parameters": {
-        "responseBody": "hola mundo y el web-hook de n8n",
         "respondWith": "text",
+        "responseBody": "=hola mundo: {{ $json.body.mensaje }}",
         "options": {}
       },
       "id": "Respond",
       "name": "Respond to Webhook",
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1,
-      "position": [460, 300]
+      "position": [
+        272,
+        0
+      ]
     }
   ],
+  "pinData": {},
   "connections": {
-    "Webhook": { "main": [ [ { "node": "Respond to Webhook", "type": "main", "index": 0 } ] ] }
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
   },
-  "active": true
+  "active": false
 }
