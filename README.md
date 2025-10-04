@@ -44,6 +44,7 @@ Configura estas variables en la instancia de n8n (por ejemplo añadiéndolas al 
 
 > Todos los servicios utilizados son abiertos: datasets del Gobierno de Chile para geodatos y clima, y modelos open-source servidos desde Hugging Face (es posible auto hospedarlos si prefieres evitar llamadas externas).
 
+
 ## Local
 ```
 docker compose up -d --build

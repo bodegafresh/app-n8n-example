@@ -1,0 +1,491 @@
+{
+  "name": "Telegram Clima Chile",
+  "nodes": [
+    {
+      "parameters": {
+        "updates": [
+          "message"
+        ],
+        "options": {
+          "downloadImages": false,
+          "downloadAudio": false,
+          "downloadDocuments": false
+        }
+      },
+      "id": "Telegram Trigger",
+      "name": "Telegram Trigger",
+      "type": "n8n-nodes-base.telegramTrigger",
+      "typeVersion": 1,
+      "position": [200, 300],
+      "credentials": {
+        "telegramApi": {
+          "name": "Telegram Bot"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "functionCode": "const message = $json.message || {};\nconst base = {\n  chatId: message.chat?.id,\n  username: message.from?.username || '',\n  firstName: message.from?.first_name || '',\n  language: message.from?.language_code || 'es'\n};\n\nif (message.voice) {\n  return [{ json: { ...base, inputType: 'voice', fileId: message.voice.file_id, mimeType: message.voice.mime_type || 'audio/ogg' } }];\n}\n\nif (message.text) {\n  const clean = message.text.trim();\n  return [{ json: { ...base, inputType: 'text', query: clean } }];\n}\n\nif (message.location) {\n  const lat = message.location.latitude;\n  const lng = message.location.longitude;\n  return [{ json: { ...base, inputType: 'location', query: `${lat},${lng}`, latitude: lat, longitude: lng } }];\n}\n\nreturn [{ json: { ...base, inputType: 'unsupported' } }];"
+      },
+      "id": "Normalizar entrada",
+      "name": "Normalizar entrada",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [460, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{$json['inputType']}}",
+              "operation": "equal",
+              "value2": "voice"
+            }
+          ],
+          "boolean": []
+        }
+      },
+      "id": "Tiene voz?",
+      "name": "Tiene voz?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [720, 300]
+    },
+    {
+      "parameters": {
+        "resource": "file",
+        "operation": "getFile",
+        "fileId": "={{$json['fileId']}}"
+      },
+      "id": "Obtener archivo de voz",
+      "name": "Obtener archivo de voz",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1,
+      "position": [980, 200],
+      "credentials": {
+        "telegramApi": {
+          "name": "Telegram Bot"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "mode": "mergeByPosition"
+      },
+      "id": "Combinar datos voz",
+      "name": "Combinar datos voz",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 2,
+      "position": [1220, 200]
+    },
+    {
+      "parameters": {
+        "functionCode": "const info = $json.result || {};\nreturn [{ json: { chatId: $json.chatId, fileId: $json.fileId, filePath: info.file_path, source: 'voice', query: $json.query || '', username: $json.username, firstName: $json.firstName } }];"
+      },
+      "id": "Preparar metadatos voz",
+      "name": "Preparar metadatos voz",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [1460, 200]
+    },
+    {
+      "parameters": {
+        "functionCode": "const token = $env.TELEGRAM_BOT_TOKEN;\nif (!token) {\n  throw new Error('Configura la variable TELEGRAM_BOT_TOKEN en n8n');\n}\nconst filePath = $json.filePath;\nif (!filePath) {\n  throw new Error('No se obtuvo file_path del archivo de voz.');\n}\nconst url = `https://api.telegram.org/file/bot${token}/${filePath}`;\nconst data = await this.helpers.httpRequest({\n  method: 'GET',\n  url,\n  encoding: null,\n  json: false\n});\nconst buffer = Buffer.isBuffer(data) ? data : Buffer.from(data, 'binary');\nreturn [{ json: $json, binary: { entrada: { data: buffer.toString('base64'), fileName: 'entrada.ogg', mimeType: 'audio/ogg' } } }];"
+      },
+      "id": "Descargar voz",
+      "name": "Descargar voz",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [1700, 200]
+    },
+    {
+      "parameters": {
+        "functionCode": "return items.map(item => ({ json: item.json, binary: { audio: item.binary.entrada } }));"
+      },
+      "id": "Preparar binario voz",
+      "name": "Preparar binario voz",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [1960, 200]
+    },
+    {
+      "parameters": {
+        "url": "={{$env['STT_SERVICE_URL']}}/asr",
+        "method": "POST",
+        "sendBinaryData": true,
+        "binaryPropertyName": "audio",
+        "responseFormat": "json",
+        "options": {
+          "fullResponse": false
+        },
+        "queryParametersUi": {
+          "parameter": [
+            {
+              "name": "language",
+              "value": "es"
+            }
+          ]
+        }
+      },
+      "id": "STT Whisper",
+      "name": "STT Whisper",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 2,
+      "position": [2220, 200]
+    },
+    {
+      "parameters": {
+        "functionCode": "const base = $items('Preparar binario voz', 0, 0).json;\nconst text = $json.text || $json.transcription || $json.result || '';\nconst query = (text || base.query || '').trim() || 'Santiago';\nreturn [{ json: { chatId: base.chatId, query, source: 'voice', username: base.username, firstName: base.firstName } }];"
+      },
+      "id": "Normalizar texto voz",
+      "name": "Normalizar texto voz",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [2460, 200]
+    },
+    {
+      "parameters": {
+        "functionCode": "const tipo = $json.inputType;\nif (tipo === 'unsupported') {\n  return [{ json: { chatId: $json.chatId, error: 'Envíame texto, una nota de voz o tu ubicación para consultar el clima.', source: 'unsupported' } }];\n}\nif (tipo === 'location') {\n  return [{ json: { chatId: $json.chatId, query: ($json.query || '').trim(), latitude: $json.latitude, longitude: $json.longitude, source: 'location' } }];\n}\nreturn [{ json: { chatId: $json.chatId, query: ($json.query || '').trim(), source: 'text' } }];"
+      },
+      "id": "Texto directo",
+      "name": "Texto directo",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [980, 420]
+    },
+    {
+      "parameters": {
+        "mode": "passThrough",
+        "property": "main"
+      },
+      "id": "Unir consultas",
+      "name": "Unir consultas",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 2,
+      "position": [2740, 320]
+    },
+    {
+      "parameters": {
+        "url": "https://api.gael.cloud/general/public/clima",
+        "responseFormat": "json",
+        "options": {
+          "splitIntoItems": true
+        }
+      },
+      "id": "Catálogo clima",
+      "name": "Catálogo clima",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 2,
+      "position": [3000, 320]
+    },
+    {
+      "parameters": {
+        "functionCode": "if ($json.error) {\n  return [{ json: $json }];\n}\nconst listado = $items('Catálogo clima', 0, 0).map(i => i.json);\nconst query = ($json.query || '').toLowerCase();\nlet seleccionado = null;\nif ($json.latitude && $json.longitude) {\n  let distancia = Number.MAX_VALUE;\n  listado.forEach((item) => {\n    const lat = parseFloat(item.Latitud);\n    const lng = parseFloat(item.Longitud);\n    if (isNaN(lat) || isNaN(lng)) return;\n    const dLat = lat - $json.latitude;\n    const dLng = lng - $json.longitude;\n    const dist = Math.sqrt(dLat * dLat + dLng * dLng);\n    if (dist < distancia) {\n      distancia = dist;\n      seleccionado = item;\n    }\n  });\n} else {\n  seleccionado = listado.find((item) => {\n    return [item.NombreRegion, item.NombreCiudad, item.Estacion].some((campo) => (campo || '').toLowerCase().includes(query));\n  });\n}\nif (!seleccionado) {\n  return [{ json: { chatId: $json.chatId, error: `No se encontró información para ${$json.query || 'la ubicación indicada'}.`, query: $json.query } }];\n}\nreturn [{ json: { chatId: $json.chatId, query: $json.query, estacion: seleccionado.Estacion, region: seleccionado.NombreRegion, ciudad: seleccionado.NombreCiudad, temperatura: seleccionado.Temp, humedad: seleccionado.Humedad, viento: seleccionado.Viento, icono: seleccionado.Icono } }];"
+      },
+      "id": "Seleccionar estación",
+      "name": "Seleccionar estación",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [3260, 320]
+    },
+    {
+      "parameters": {
+        "url": "https://api.senapred.cl/v1/alerts",
+        "responseFormat": "json",
+        "options": {
+          "splitIntoItems": true,
+          "queryParametersUi": {
+            "parameter": [
+              {
+                "name": "estado",
+                "value": "activas"
+              }
+            ]
+          }
+        }
+      },
+      "id": "Alertas SENAPRED",
+      "name": "Alertas SENAPRED",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 2,
+      "position": [3520, 320]
+    },
+    {
+      "parameters": {
+        "functionCode": "const item = $json;\nif (item.error) {\n  return [{ json: { chatId: item.chatId, speech: item.error, text: item.error } }];\n}\nconst alertas = ($items('Alertas SENAPRED', 0, 0) || []).map(i => i.json).filter(a => {\n  const region = ((a.region || a.Region) || '').toLowerCase();\n  return region.includes((item.region || '').toLowerCase());\n});\nconst alertaTexto = alertas.length ? `Alerta vigente: ${alertas.map(a => (a.titulo || a.Evento || a.evento)).join('; ')}.` : 'Sin alertas meteorológicas vigentes en la región.';\nconst partes = [\n  `Clima para ${item.ciudad || item.estacion} en ${item.region}.`,\n  `Temperatura: ${item.temperatura} °C.`,\n  `Humedad relativa: ${item.humedad}%.`,\n  `Viento: ${item.viento}.`,\n  alertaTexto\n];\nconst respuesta = partes.join(' ');\nreturn [{ json: { chatId: item.chatId, speech: respuesta, text: respuesta } }];"
+      },
+      "id": "Construir respuesta",
+      "name": "Construir respuesta",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [3780, 320]
+    },
+    {
+      "parameters": {
+        "url": "={{$env['TTS_SERVICE_URL']}}/api/tts",
+        "method": "POST",
+        "responseFormat": "file",
+        "sendBinaryData": false,
+        "options": {
+          "headers": {
+            "Content-Type": "application/json"
+          }
+        },
+        "jsonParameters": true,
+        "body": "={\"text\": $json.speech, \"voice\": $env['TTS_VOICE'] || 'es_ES/carlfm'}",
+        "downloadFileName": "respuesta.ogg",
+        "dataPropertyName": "voz"
+      },
+      "id": "Texto a voz",
+      "name": "Texto a voz",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 2,
+      "position": [4040, 320]
+    },
+    {
+      "parameters": {
+        "functionCode": "return items.map(item => ({ json: item.json, binary: { respuesta: item.binary.voz } }));"
+      },
+      "id": "Preparar voz respuesta",
+      "name": "Preparar voz respuesta",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [4300, 320]
+    },
+    {
+      "parameters": {
+        "resource": "message",
+        "operation": "sendVoice",
+        "chatId": "={{$json['chatId']}}",
+        "additionalFields": {
+          "caption": "={{$json['text']}}"
+        },
+        "voice": "respuesta"
+      },
+      "id": "Enviar respuesta",
+      "name": "Enviar respuesta",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1,
+      "position": [4560, 320],
+      "credentials": {
+        "telegramApi": {
+          "name": "Telegram Bot"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Telegram Trigger": {
+      "main": [
+        [
+          {
+            "node": "Normalizar entrada",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalizar entrada": {
+      "main": [
+        [
+          {
+            "node": "Tiene voz?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Tiene voz?": {
+      "main": [
+        [
+          {
+            "node": "Obtener archivo de voz",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Combinar datos voz",
+            "type": "main",
+            "index": 1
+          }
+        ],
+        [
+          {
+            "node": "Texto directo",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Obtener archivo de voz": {
+      "main": [
+        [
+          {
+            "node": "Combinar datos voz",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Combinar datos voz": {
+      "main": [
+        [
+          {
+            "node": "Preparar metadatos voz",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Preparar metadatos voz": {
+      "main": [
+        [
+          {
+            "node": "Descargar voz",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Descargar voz": {
+      "main": [
+        [
+          {
+            "node": "Preparar binario voz",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Preparar binario voz": {
+      "main": [
+        [
+          {
+            "node": "STT Whisper",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "STT Whisper": {
+      "main": [
+        [
+          {
+            "node": "Normalizar texto voz",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalizar texto voz": {
+      "main": [
+        [
+          {
+            "node": "Unir consultas",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Texto directo": {
+      "main": [
+        [
+          {
+            "node": "Unir consultas",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Unir consultas": {
+      "main": [
+        [
+          {
+            "node": "Catálogo clima",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Catálogo clima": {
+      "main": [
+        [
+          {
+            "node": "Seleccionar estación",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Seleccionar estación": {
+      "main": [
+        [
+          {
+            "node": "Alertas SENAPRED",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Alertas SENAPRED": {
+      "main": [
+        [
+          {
+            "node": "Construir respuesta",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Construir respuesta": {
+      "main": [
+        [
+          {
+            "node": "Texto a voz",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Texto a voz": {
+      "main": [
+        [
+          {
+            "node": "Preparar voz respuesta",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Preparar voz respuesta": {
+      "main": [
+        [
+          {
+            "node": "Enviar respuesta",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false
+}
