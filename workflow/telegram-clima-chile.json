@@ -56,7 +56,7 @@
       "parameters": {
         "resource": "file",
         "operation": "getFile",
-        "fileId": "={{$json['fileId']}}"
+        "fileId": "={{$json['fileId'] || $json['file_id'] || ($json['voice'] ? $json['voice'].file_id : undefined)}}"
       },
       "id": "Obtener archivo de voz",
       "name": "Obtener archivo de voz",
@@ -81,7 +81,7 @@
     },
     {
       "parameters": {
-        "functionCode": "const info = $json.result || {};\nreturn [{ json: { chatId: $json.chatId, fileId: $json.fileId, filePath: info.file_path, source: 'voice', query: $json.query || '', username: $json.username, firstName: $json.firstName } }];"
+        "functionCode": "const base = $items('Tiene voz?', 0, $itemIndex)?.json || {};\nconst apiData = $items('Obtener archivo de voz', 0, $itemIndex)?.json || {};\nconst result = apiData.result || apiData;\nconst filePath = result.file_path || result.filePath;\nif (!filePath) {\n  throw new Error('No se obtuvo file_path del archivo de voz de Telegram.');\n}\nreturn [{ json: { chatId: base.chatId || $json.chatId, fileId: base.fileId || result.file_id, filePath, source: 'voice', query: (base.query || $json.query || ''), username: base.username || '', firstName: base.firstName || '' } }];"
       },
       "id": "Preparar metadatos voz",
       "name": "Preparar metadatos voz",
@@ -156,8 +156,7 @@
     },
     {
       "parameters": {
-        "mode": "passThrough",
-        "property": "main"
+        "mode": "append"
       },
       "id": "Unir consultas",
       "name": "Unir consultas",
@@ -309,7 +308,7 @@
           {
             "node": "Combinar datos voz",
             "type": "main",
-            "index": 1
+            "index": 0
           }
         ],
         [
@@ -327,7 +326,7 @@
           {
             "node": "Combinar datos voz",
             "type": "main",
-            "index": 0
+            "index": 1
           }
         ]
       ]
