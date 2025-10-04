@@ -1,0 +1,506 @@
+{
+  "name": "Telegram Bot - Clima Chile",
+  "nodes": [
+    {
+      "parameters": {
+        "updates": [
+          "message"
+        ]
+      },
+      "id": "Telegram Trigger",
+      "name": "Telegram Trigger",
+      "type": "n8n-nodes-base.telegramTrigger",
+      "typeVersion": 1,
+      "position": [80, 360]
+    },
+    {
+      "parameters": {
+        "functionCode": "const message = $json.message || {}\nreturn [{\n  chatId: message.chat?.id,\n  firstName: message.from?.first_name ?? '',\n  isVoice: Boolean(message.voice),\n  voiceFileId: message.voice?.file_id ?? null,\n  rawText: (message.text ?? message.caption ?? '').trim(),\n  original: message\n}]"
+      },
+      "id": "Preparar Entrada",
+      "name": "Preparar entrada",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [320, 360]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{$json[\"isVoice\"]}}"
+            }
+          ]
+        }
+      },
+      "id": "Es Voz?",
+      "name": "¿Es voz?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [540, 360]
+    },
+    {
+      "parameters": {
+        "resource": "file",
+        "operation": "getFile",
+        "fileId": "={{$json[\"voiceFileId\"]}}"
+      },
+      "id": "Obtener Archivo",
+      "name": "Telegram: obtener archivo",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1,
+      "position": [760, 200]
+    },
+    {
+      "parameters": {
+        "url": "=https://api.telegram.org/file/bot{{$env.TELEGRAM_BOT_TOKEN}}/{{$json[\"result\"][\"file_path\"]}}",
+        "responseFormat": "file",
+        "binaryPropertyName": "voiceOgg"
+      },
+      "id": "Descargar Voz",
+      "name": "Descargar voz",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 1,
+      "position": [1000, 200]
+    },
+    {
+      "parameters": {
+        "url": "={{$env.HF_ASR_URL || 'https://api-inference.huggingface.co/models/openai/whisper-small'}}",
+        "responseFormat": "json",
+        "sendBinaryData": true,
+        "binaryPropertyName": "voiceOgg",
+        "headerParametersJson": "{\n  \"Authorization\": \"Bearer {{$env.HF_TOKEN}}\",\n  \"Content-Type\": \"application/octet-stream\"\n}"
+      },
+      "id": "ASR",
+      "name": "ASR HuggingFace",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 1,
+      "position": [1240, 200]
+    },
+    {
+      "parameters": {
+        "functionCode": "const base = $items(\"Preparar entrada\", 0, $itemIndex).json\nconst data = Array.isArray($json) ? $json : ($json.text ? [$json] : [])\nconst text = data[0]?.text ?? ''\nreturn [{\n  chatId: base.chatId,\n  firstName: base.firstName,\n  queryText: text.trim(),\n  source: 'voice'\n}]"
+      },
+      "id": "Voz a Texto",
+      "name": "Voz → texto",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [1460, 200]
+    },
+    {
+      "parameters": {
+        "functionCode": "return [{\n  chatId: $json.chatId,\n  firstName: $json.firstName,\n  queryText: $json.rawText,\n  source: 'text'\n}]"
+      },
+      "id": "Usar Texto",
+      "name": "Usar texto",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [760, 520]
+    },
+    {
+      "parameters": {
+        "functionCode": "const query = ($json.queryText || '').trim()\nreturn [{\n  chatId: $json.chatId,\n  firstName: $json.firstName,\n  queryText: query,\n  hasQuery: query.length > 0\n}]"
+      },
+      "id": "Validar Entrada",
+      "name": "Validar entrada",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [1700, 360]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{$json[\"hasQuery\"]}}"
+            }
+          ]
+        }
+      },
+      "id": "Tiene Consulta",
+      "name": "¿Hay consulta?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [1920, 360]
+    },
+    {
+      "parameters": {
+        "chatId": "={{$json.chatId}}",
+        "text": "Hola {{$json.firstName || ''}} 👋. No pude interpretar tu consulta. Envía el nombre de una ciudad, comuna o región de Chile."
+      },
+      "id": "Aviso Falta Texto",
+      "name": "Telegram: falta texto",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1,
+      "position": [2140, 520]
+    },
+    {
+      "parameters": {
+        "url": "https://apis.digital.gob.cl/dpa/comunas",
+        "responseFormat": "json",
+        "queryParametersJson": "{\n  \"nombre\": \"{{$json.queryText}}\"\n}"
+      },
+      "id": "Buscar Comunas",
+      "name": "Buscar comunas",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 1,
+      "position": [2140, 180]
+    },
+    {
+      "parameters": {
+        "functionCode": "const base = $items(\"Validar entrada\", 0, $itemIndex).json\nconst comunas = Array.isArray($json) ? $json : []\nif (!comunas.length) {\n  return [{...base, hasMatch: false}]\n}\nconst normalize = (s) => s?.toString().toLowerCase()\nconst target = normalize(base.queryText)\nlet best = comunas[0]\nfor (const comuna of comunas) {\n  if (normalize(comuna.nombre)?.includes(target)) {\n    best = comuna\n    break\n  }\n}\nreturn [{...base, hasMatch: true, comuna: best}]"
+      },
+      "id": "Seleccionar Comuna",
+      "name": "Seleccionar comuna",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [2360, 180]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{$json[\"hasMatch\"]}}"
+            }
+          ]
+        }
+      },
+      "id": "Tiene Comuna",
+      "name": "¿Hay comuna?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [2580, 180]
+    },
+    {
+      "parameters": {
+        "chatId": "={{$json.chatId}}",
+        "text": "No encontré información geográfica para \"{{$json.queryText}}\". Intenta con otra ciudad/comuna/región de Chile."
+      },
+      "id": "Aviso Sin Comuna",
+      "name": "Telegram: sin comuna",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1,
+      "position": [2800, 380]
+    },
+    {
+      "parameters": {
+        "url": "https://api.gael.cloud/general/public/clima",
+        "responseFormat": "json"
+      },
+      "id": "Datos Clima",
+      "name": "Datos clima",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 1,
+      "position": [2800, 40]
+    },
+    {
+      "parameters": {
+        "functionCode": "const base = $items(\"Seleccionar comuna\", 0, $itemIndex).json\nconst registros = Array.isArray($json) ? $json : []\nconst normalize = (s) => s?.toString().toLowerCase()\nconst comuna = base.comuna\nlet seleccionado = registros.find(r => normalize(r.Estacion)?.includes(normalize(comuna.nombre)))\nif (!seleccionado) {\n  seleccionado = registros.find(r => normalize(r.Region)?.includes(normalize(comuna.region?.nombre)))\n}\nreturn [{...base, weather: seleccionado || null}]"
+      },
+      "id": "Seleccionar Clima",
+      "name": "Seleccionar clima",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [3020, 40]
+    },
+    {
+      "parameters": {
+        "url": "https://api.senapred.cl/alertas",
+        "responseFormat": "json",
+        "queryParametersJson": "{\n  \"region\": \"{{$items(\"Seleccionar clima\", 0, $itemIndex).json.comuna.region?.nombre}}\"\n}"
+      },
+      "id": "Alertas",
+      "name": "Alertas SENAPRED",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 1,
+      "position": [3240, 40]
+    },
+    {
+      "parameters": {
+        "functionCode": "const base = $items(\"Seleccionar clima\", 0, $itemIndex).json\nconst alertData = Array.isArray($json) ? $json : ($json.data ?? [])\nconst weather = base.weather\nconst comuna = base.comuna\nif (!weather) {\n  const summary = `No hay datos meteorológicos vigentes para ${comuna?.nombre || base.queryText}.`\n  return [{\n    chatId: base.chatId,\n    summary,\n    ttsText: summary\n  }]\n}\nconst temperatura = weather.Temp ?? weather.Temperatura ?? weather.temp ?? ''\nconst humedad = weather.Humedad ?? weather.humedad ?? ''\nconst viento = weather.Viento ?? weather.viento ?? weather.VelocidadDelViento ?? ''\nconst condicion = weather.Estado ?? weather.descripcion ?? ''\nconst region = comuna.region?.nombre?.toLowerCase?.() || ''\nconst alertas = alertData.filter((a) => {\n  const zonas = (a?.zonas || a?.comunas || [])\n  return zonas.some((z) => z.toLowerCase?.().includes(region))\n})\nlet alertaTexto = 'Sin alertas vigentes.'\nif (alertas.length) {\n  alertaTexto = alertas.map((a) => `${a.tipo || 'Alerta'}: ${(a.descripcion || a.detalle || '').trim()}`).join(' | ')\n}\nconst summary = `Clima para ${comuna.nombre}, ${comuna.region?.nombre}: ${condicion}. Temperatura ${temperatura}°C, humedad ${humedad}%, viento ${viento}. ${alertaTexto}`\nreturn [{\n  chatId: base.chatId,\n  summary,\n  ttsText: summary\n}]"
+      },
+      "id": "Construir Respuesta",
+      "name": "Construir respuesta",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [3460, 40]
+    },
+    {
+      "parameters": {
+        "chatId": "={{$json.chatId}}",
+        "text": "={{$json.summary}}"
+      },
+      "id": "Mensaje Texto",
+      "name": "Telegram: mensaje",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1,
+      "position": [3680, 200]
+    },
+    {
+      "parameters": {
+        "url": "={{$env.HF_TTS_URL || 'https://api-inference.huggingface.co/models/facebook/mms-tts-esp'}}",
+        "responseFormat": "file",
+        "jsonParameters": true,
+        "jsonBody": "{\n  \"inputs\": \"{{$json.ttsText}}\"\n}",
+        "headerParametersJson": "{\n  \"Authorization\": \"Bearer {{$env.HF_TOKEN}}\"\n}",
+        "binaryPropertyName": "ttsAudio"
+      },
+      "id": "Generar Voz",
+      "name": "Generar voz",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 1,
+      "position": [3680, 40]
+    },
+    {
+      "parameters": {
+        "resource": "message",
+        "operation": "sendAudio",
+        "chatId": "={{$json.chatId}}",
+        "binaryPropertyName": "ttsAudio",
+        "fileName": "clima.ogg",
+        "additionalFields": {
+          "caption": "={{$json.summary}}"
+        }
+      },
+      "id": "Enviar Audio",
+      "name": "Telegram: enviar audio",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1,
+      "position": [3900, 40]
+    }
+  ],
+  "connections": {
+    "Telegram Trigger": {
+      "main": [
+        [
+          {
+            "node": "Preparar entrada",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Preparar entrada": {
+      "main": [
+        [
+          {
+            "node": "¿Es voz?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "¿Es voz?": {
+      "main": [
+        [
+          {
+            "node": "Telegram: obtener archivo",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Usar texto",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Telegram: obtener archivo": {
+      "main": [
+        [
+          {
+            "node": "Descargar voz",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Descargar voz": {
+      "main": [
+        [
+          {
+            "node": "ASR HuggingFace",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "ASR HuggingFace": {
+      "main": [
+        [
+          {
+            "node": "Voz → texto",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Voz → texto": {
+      "main": [
+        [
+          {
+            "node": "Validar entrada",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Usar texto": {
+      "main": [
+        [
+          {
+            "node": "Validar entrada",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validar entrada": {
+      "main": [
+        [
+          {
+            "node": "¿Hay consulta?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "¿Hay consulta?": {
+      "main": [
+        [
+          {
+            "node": "Buscar comunas",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Telegram: falta texto",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Buscar comunas": {
+      "main": [
+        [
+          {
+            "node": "Seleccionar comuna",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Seleccionar comuna": {
+      "main": [
+        [
+          {
+            "node": "¿Hay comuna?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "¿Hay comuna?": {
+      "main": [
+        [
+          {
+            "node": "Datos clima",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Telegram: sin comuna",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Datos clima": {
+      "main": [
+        [
+          {
+            "node": "Seleccionar clima",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Seleccionar clima": {
+      "main": [
+        [
+          {
+            "node": "Alertas SENAPRED",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Alertas SENAPRED": {
+      "main": [
+        [
+          {
+            "node": "Construir respuesta",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Construir respuesta": {
+      "main": [
+        [
+          {
+            "node": "Generar voz",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Telegram: mensaje",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Generar voz": {
+      "main": [
+        [
+          {
+            "node": "Telegram: enviar audio",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "pinData": {}
+}

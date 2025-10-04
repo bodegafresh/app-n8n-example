@@ -1,30 +1,49 @@
 # SaaS MVP (Easypanel Opción 1) — n8n + Web
 Mini web (Express) que llama a un webhook de n8n y muestra “hola mundo”. Preparado para Easypanel con **dos apps** (web y n8n) y **subdominios**.
 
-## Bot de clima para Chile
-Se agregó un flujo de n8n (`workflow/telegram-clima-chile.json`) que expone un bot de Telegram capaz de responder, en **voz**, las consultas de clima para cualquier ciudad, comuna o región de Chile. El bot admite mensajes de texto y notas de voz, consulta fuentes abiertas del Gobierno de Chile y responde utilizando servicios de voz libres.
+## Bot de clima para Telegram (Chile)
 
-### Requisitos
-- Credenciales de un bot de Telegram (`BOT_TOKEN`).
-- Servicio de _speech-to-text_ abierto (por ejemplo [`whisper-asr-webservice`](https://github.com/ahmetoner/whisper-asr-webservice)) expuesto como API REST (`STT_SERVICE_URL`).
-- Servicio de _text-to-speech_ abierto (por ejemplo [`Mycroft Mimic3`](https://github.com/MycroftAI/mimic3) con la imagen `synesthesiam/mimic3`) expuesto como API REST (`TTS_SERVICE_URL`).
-- Acceso a las API abiertas:
-  - [Climatología](https://api.gael.cloud/general/public/clima) con datos de la Dirección Meteorológica de Chile.
-  - [Alertas SENAPRED](https://www.senapred.cl/) vía `https://api.senapred.cl/v1/alerts`.
+Se incluye un workflow listo para importar en n8n (`workflow/telegram_clima_chile.json`) que crea un bot de Telegram capaz de:
 
-### Puesta en marcha
-1. Levanta los servicios de STT y TTS (ejemplo con Docker):
-   ```bash
-   docker run -d --name mimic3 -p 59125:59125 synesthesiam/mimic3:latest
-   docker run -d --name whisper -p 5000:5000 ghcr.io/ahmetoner/whisper-asr-webservice:latest
-   ```
-2. Configura en n8n las credenciales necesarias:
-   - **Telegram**: crea el credential con tu token y agrega la variable `TELEGRAM_BOT_TOKEN` en n8n con el mismo valor para permitir la descarga de audios.
-   - **Variables** `STT_SERVICE_URL=http://whisper:5000` y `TTS_SERVICE_URL=http://mimic3:59125` (ajusta según tu despliegue). Puedes definir opcionalmente `TTS_VOICE` para personalizar la voz de salida.
-3. Importa y activa el workflow `workflow/telegram-clima-chile.json` desde n8n.
-4. Conversa con tu bot en Telegram. Puedes enviar texto, notas de voz o tu ubicación para recibir el resumen hablado de temperatura, humedad, viento y alertas vigentes.
+- Recibir consultas escritas **o por voz** sobre el clima en cualquier ciudad/comuna/región de Chile.
+- Transcribir audios usando modelos abiertos de Hugging Face (Whisper).
+- Consultar datos meteorológicos y alertas usando APIs públicas del Gobierno de Chile (`apis.digital.gob.cl` para georreferenciar comunas y `api.gael.cloud/general/public/clima` para datos de la Dirección Meteorológica de Chile, además de `api.senapred.cl/alertas` para emergencias).
+- Responder con un resumen en texto **y** un mensaje de voz generado con modelos TTS abiertos (Hugging Face `facebook/mms-tts-esp`).
 
-> **Nota:** el workflow queda desactivado por defecto. Actívalo luego de configurar los servicios.
+> **Importante:** Debes crear el bot desde [@BotFather](https://t.me/BotFather) y obtener un token válido. Además necesitarás un token gratuito de Hugging Face para invocar las APIs de inferencia (modelo de transcripción y TTS).
+
+### Variables de entorno requeridas en n8n
+
+Configura estas variables en la instancia de n8n (por ejemplo añadiéndolas al `.env` o en Easypanel):
+
+| Variable | Descripción |
+| --- | --- |
+| `TELEGRAM_BOT_TOKEN` | Token del bot entregado por BotFather. Se usa para descargar los audios recibidos. |
+| `HF_TOKEN` | Token personal de Hugging Face (permite invocar las inferencias gratuitas). |
+| `HF_ASR_URL` *(opcional)* | URL del modelo de transcripción. Por defecto se usa `https://api-inference.huggingface.co/models/openai/whisper-small`. |
+| `HF_TTS_URL` *(opcional)* | URL del modelo de texto a voz. Por defecto se usa `https://api-inference.huggingface.co/models/facebook/mms-tts-esp`. |
+
+### Pasos para activar el bot
+
+1. Levanta los servicios (`docker compose up -d`) y accede a la interfaz de n8n.
+2. Crea las credenciales de Telegram Bot API (para el envío de mensajes) e introduce el token provisto por BotFather.
+3. Importa el workflow `workflow/telegram_clima_chile.json` y asigna las credenciales de Telegram a los nodos correspondientes (`Telegram Trigger`, envíos de mensajes/audio y obtención de archivos).
+4. Verifica que las variables de entorno estén disponibles (en **Settings → Environment Variables** de n8n puedes confirmarlo con un nodo Function `{{$env.VARIABLE}}`).
+5. Activa el workflow. Telegram entregará un webhook único que debes registrar mediante `setWebhook` (n8n lo hace automáticamente al activar el workflow de disparo).
+6. Prueba el bot enviando un texto o nota de voz indicando una ciudad/comuna/región. El bot responderá con el resumen en texto y un audio sintetizado en español.
+
+### ¿Cómo funciona el workflow?
+
+1. **Trigger de Telegram:** recibe cualquier mensaje y detecta si incluye audio (`voice`).
+2. **Entrada de texto:** se usa directamente como consulta.
+3. **Entrada de voz:** se descarga el archivo `.ogg`, se envía al modelo Whisper (Hugging Face) para obtener la transcripción en texto.
+4. **Normalización geográfica:** con el texto resultante se consulta la API de División Política Administrativa (`apis.digital.gob.cl/dpa/comunas`) y se selecciona la mejor coincidencia.
+5. **Datos meteorológicos:** se descargan los registros públicos de `api.gael.cloud/general/public/clima` y se filtra la estación más cercana a la comuna/ región. En paralelo se consultan alertas vigentes en `api.senapred.cl/alertas` para la región.
+6. **Construcción de respuesta:** se arma un resumen con condición, temperatura (°C), humedad, viento y alertas relevantes.
+7. **Entrega al usuario:** se envía el resumen por texto y se genera un audio con el modelo `facebook/mms-tts-esp`, que se envía como mensaje de voz/audio a Telegram.
+
+> Todos los servicios utilizados son abiertos: datasets del Gobierno de Chile para geodatos y clima, y modelos open-source servidos desde Hugging Face (es posible auto hospedarlos si prefieres evitar llamadas externas).
+
 
 ## Local
 ```
